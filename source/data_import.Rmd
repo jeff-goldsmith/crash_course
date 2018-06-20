@@ -1,0 +1,26 @@
+---
+title: "Data Import"
+author: "Jeff Goldsmith"
+date: "`r Sys.time()`"
+output:
+  html_document:
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## CSV
+
+Importing a .csv
+
+```{r csv}
+library(tidyverse)
+
+litters = read_csv(here::here("data", "FAS_litters.csv"))
+litters = janitor::clean_names(litters)
+
+# skimr::skim(litters)
+```
+

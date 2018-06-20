@@ -1,0 +1,133 @@
+---
+title: "Data Manipulation"
+author: "Jeff Goldsmith"
+date: "`r Sys.time()`"
+output:
+  html_document:
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Import data.
+
+```{r csv}
+library(tidyverse)
+
+litters_data = read_csv(here::here("data", "FAS_litters.csv"),
+  col_types = "ccddiiii")
+litters_data = janitor::clean_names(litters_data)
+
+pups_data = read_csv(here::here("data", "FAS_pups.csv"),
+  col_types = "ciiiii")
+pups_data = janitor::clean_names(pups_data)
+```
+
+## Select
+
+Illustrating `select`.
+
+```{r}
+select(litters_data, group, litter_number, gd_of_birth)
+
+select(litters_data, group, litter_number, gd_of_birth:pups_dead_birth)
+
+select(litters_data, litter_number, gd18_weight, everything())
+
+select(litters_data, -gd18_weight)
+
+select(litters_data, starts_with("gd"))
+
+pull(litters_data, group)
+```
+
+
+## Filter
+
+Illustrating `filter`.
+
+```{r}
+filter(litters_data, group == "Mod7")
+
+filter(litters_data, group == "Mod7", gd_of_birth == 19)
+
+filter(litters_data, group %in% c("Mod7", "Con7"))
+
+```
+
+## Mutate
+
+Illustrating `mutate`.
+
+
+```{r}
+mutate(litters_data,
+       weight_gain = gd18_weight - gd0_weight,
+       group = tolower(group))
+```
+
+## Arrange
+
+Illustrating `arrage`.
+
+
+```{r}
+arrange(litters_data, gd0_weight)
+```
+
+## Piping
+
+What is this pipe business?
+
+```{r}
+litters_data = 
+  read_csv(here::here("data", "FAS_litters.csv"), 
+                      col_types = "ccddiiii") %>% 
+  janitor::clean_names() %>% 
+  select(., -pups_survive) %>% 
+  mutate(., 
+    wt_gain = gd18_weight - gd0_weight,
+    group = tolower(group))
+```
+
+Fitting a model as part of a pipe.
+
+```{r}
+litters_model = 
+  litters_data %>% 
+  filter(group %in% c("con7", "con8")) %>% 
+  lm(gd18_weight ~ gd0_weight, data = .) 
+```
+
+## Other stuff
+
+Tidy the output of a liner model (note: works with tons of model types).
+
+```{r}
+broom::tidy(litters_model) %>% 
+  select(-std.error, -statistic) %>% 
+  filter(term != "(Intercept)") %>% 
+  knitr::kable(digits = 3)
+```
+
+Adding fitted values, residuals, etc.
+
+```{r}
+litters_data %>% 
+  filter(group %in% c("con7", "con8")) %>% 
+  modelr::add_predictions(model = litters_model) %>% 
+  modelr::add_residuals(model = litters_model)
+```
+
+
+Adding predictions / residuals works even on different datasets -- handy for assessing prediction accuracy ...
+
+```{r}
+litters_data %>% 
+  modelr::add_predictions(model = litters_model) %>% 
+  modelr::add_residuals(model = litters_model)
+```
+
+
