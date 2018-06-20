@@ -1,0 +1,141 @@
+---
+title: "Data Tidying"
+author: "Jeff Goldsmith"
+date: "`r Sys.time()`"
+output:
+  html_document:
+    code_folding: hide
+---
+
+For Todd, here's an equation!
+
+$$y_i = \beta_0 + \epsilon$$
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+```
+
+## Wide to long (gather)
+
+PULSE data.
+
+```{r}
+pulse_data = haven::read_sas(here::here("data", "public_pulse_data.sas7bdat")) %>%
+  janitor::clean_names() %>% 
+  gather(key = visit, value = bdi, bdi_score_bl:bdi_score_12m) %>% 
+  arrange(id) 
+```
+
+
+## Separate
+
+Separate treatment level and day of treatment.
+
+```{r}
+read_csv(here::here("data", "FAS_litters.csv"), col_types = "ccddiiii") %>% 
+  janitor::clean_names() %>%
+  separate(group, into = c("dose","day_of_tx"), sep = 3)
+```
+
+
+## Long to wide (spread)
+
+Spread one variable
+
+```{r}
+analysis_result = tibble(
+  group = c("treatment", "treatment", "placebo", "placebo"),
+  time = c("pre", "post", "pre", "post"),
+  mean = c(4, 8, 3.5, 4)
+)
+
+analysis_result %>% 
+  spread(key = time, value = mean)
+```
+
+Spread two variables.
+
+```{r}
+analysis_result = tibble(
+  group = c("treatment", "treatment", "placebo", "placebo"),
+  time = c("pre", "post", "pre", "post"),
+  mean = c(4, 8, 3.5, 4), 
+  variance = c(2, 3, 4, 5)
+)
+
+analysis_result %>% 
+  gather(key = observation, value = value, mean:variance) %>% 
+  unite(obs_time, observation, time) %>% 
+  spread(key = obs_time, value = value)
+```
+
+
+## Bind rows
+
+Combining LoTR movies.
+
+```{r}
+fellowship_ring = readxl::read_excel(here::here("data", "LotR_Words.xlsx"), 
+                             range = "B3:D6") %>%
+  janitor::clean_names() %>%
+  gather(key = sex, value = words, female:male) %>%
+  mutate(race = tolower(race),
+         movie = "fellowship_ring")
+
+two_towers = readxl::read_excel(here::here("data", "LotR_Words.xlsx"), 
+                                range = "F3:H6") %>%
+  janitor::clean_names() %>%
+  gather(key = sex, value = words, female:male) %>%
+  mutate(race = tolower(race),
+         movie = "two_towers")
+
+return_king = readxl::read_excel(here::here("data", "LotR_Words.xlsx"), 
+                                 range = "J3:L6") %>%
+  janitor::clean_names() %>%
+  gather(key = sex, value = words, female:male) %>%
+  mutate(race = tolower(race),
+         movie = "return_king") %>% 
+  select(movie, words, sex, race)
+
+bind_rows(fellowship_ring, two_towers, return_king)
+```
+
+
+## Joins
+
+Easy joins on the pup data.
+
+```{r}
+pup_data = read_csv(here::here("data", "FAS_pups.csv"), col_types = "ciiiii") %>%
+  janitor::clean_names() %>%
+  mutate(sex = recode(sex, `1` = "male", `2` = "female")) 
+
+litter_data = read_csv(here::here("data", "FAS_litters.csv"), col_types = "ccddiiii") %>%
+  janitor::clean_names() %>%
+  select(-pups_survive) %>%
+  mutate(
+    wt_gain = gd18_weight - gd0_weight,
+    group = tolower(group))
+
+full_join(pup_data, litter_data, by = "litter_number")
+```
+
+Trying joins on the LoTR data
+
+```{r}
+left_join(fellowship_ring, return_king, by = c("race", "sex"))
+```
+
+If your join key has different names, you can deal with that.
+
+```{r}
+return_king = return_king %>% 
+  rename(RACE = race)
+
+left_join(fellowship_ring, return_king, by = c("race" = "RACE", "sex"))
+```
+
+

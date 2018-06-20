@@ -118,7 +118,7 @@ Adding fitted values, residuals, etc.
 litters_data %>% 
   filter(group %in% c("con7", "con8")) %>% 
   modelr::add_predictions(model = litters_model) %>% 
-  modelr::add_residuals(model = litters_model)
+  modelr::add_residuals(model = litters_model) 
 ```
 
 
@@ -130,4 +130,15 @@ litters_data %>%
   modelr::add_residuals(model = litters_model)
 ```
 
+
+
+
+```{r}
+litters_data %>% 
+  mutate(new_group = case_when(
+    group %in% c("con7", "con8") ~ "con",
+    group %in% c("mod7", "mod8") ~ "mod",
+    TRUE ~ "low"
+  )) %>% View
+```
 
