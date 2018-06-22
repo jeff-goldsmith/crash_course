@@ -1,0 +1,137 @@
+---
+title: "Visualization"
+author: "Jeff Goldsmith"
+date: "`r Sys.time()`"
+output:
+  html_document:
+    code_folding: hide
+---
+
+I include the following code chunk in most RMD files. It sets some global chunk options, loads the tidyverse, and specifies some `ggplot` preferences.
+
+```{r}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.asp = .6,
+  fig.height = 6
+)
+
+library(tidyverse)
+
+theme_set(theme_bw() + theme(legend.position = "bottom"))
+```
+
+
+NOAA dataset -- if you haven't installed the `rnoaa` package yet, you'll need to do that. Code is below.
+
+```{r, eval = FALSE}
+install.packages("rnoaa")
+```
+
+Load the data.
+
+```{r, cache = TRUE}
+weather = 
+  rnoaa::meteo_pull_monitors(c("USW00094728", "USC00519397", "USS0023B17S"),
+                      var = c("PRCP", "TMIN", "TMAX"), 
+                      date_min = "2017-01-01",
+                      date_max = "2017-12-31") %>%
+  mutate(
+    name = recode(id, USW00094728 = "CentralPark_NY", 
+                      USC00519397 = "Waikiki_HA",
+                      USS0023B17S = "Waterhole_WA"),
+    tmin = tmin / 10,
+    tmax = tmax / 10) %>%
+  select(name, id, everything())
+```
+
+
+## Plots
+
+Scatterplot.
+
+```{r}
+ggplot(data = weather, aes(x = tmin, y = tmax)) +
+  geom_point()
+```
+
+```{r}
+weather %>% 
+  ggplot(aes(x = tmin, y = tmax)) + 
+  geom_point(aes(color = name), alpha = .2) + 
+  geom_smooth(method = "loess", se = FALSE)
+```
+
+
+```{r}
+weather %>% 
+  ggplot(aes(x = tmin, y = tmax, color = name)) + 
+  geom_point(alpha = .2) + 
+  geom_smooth(aes(color = NULL), method = "loess", color = "black")
+```
+
+
+## Facet
+
+```{r}
+weather %>% 
+  ggplot(aes(x = tmin, y = tmax, color = name)) +
+  facet_grid(. ~ name) + 
+  geom_point(alpha = .2) + 
+  geom_smooth() 
+```
+
+
+
+Picking geoms ...
+
+```{r}
+new_df = tibble(
+  x = 2,
+  y = 0,
+  name = "mean"
+)
+
+ggplot(weather, aes(x = tmin, y = tmax)) + 
+  geom_hex() +
+  geom_point(data = new_df, aes(x = x, y = y), color = "red")
+```
+
+
+```{r}
+ggplot(weather, aes(x = tmin, y = tmax)) + 
+  geom_point(aes(color = name), alpha = .5) + 
+  labs(
+    title = "Temperature plot",
+    x = "Minimum daily temperature (C)",
+    y = "Maxiumum daily temperature (C)",
+    caption = "Data from the rnoaa package"
+  ) + 
+  facet_grid(.~name) + 
+  theme_bw() + 
+  theme(legend.position = "bottom")
+```
+
+## Factor levels
+
+```{r}
+weather %>% 
+  mutate(name = forcats::fct_reorder(name, tmax)) %>% 
+  ggplot(aes(x = name, y = tmax)) + geom_boxplot()
+```
+
+## Group by, mutating, and summarizing
+
+```{r}
+weather %>% 
+  group_by(name) %>% 
+  mutate(day = row_number(),
+         lag_day = lag(day)) %>% 
+  summarize(mean_tmax = mean(tmax, na.rm = TRUE),
+            sd_tmax = sd(tmax, na.rm = TRUE)) 
+```
+
+
+
