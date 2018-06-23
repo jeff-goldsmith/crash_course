@@ -1,0 +1,181 @@
+---
+title: "Visualization"
+author: "Jeff Goldsmith"
+date: "`r Sys.time()`"
+output:
+  html_document:
+    code_folding: hide
+---
+
+```{r setup}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.asp = .6,
+  fig.height = 6
+)
+
+library(tidyverse)
+
+theme_set(theme_bw() + theme(legend.position = "bottom"))
+```
+
+
+## Function definitions
+
+
+For `sim_regression`.
+
+```{r}
+sim_regression = function(n, beta0 = 0, beta1 = 1) {
+	
+	sim_data = tibble(
+		x = rnorm(n, mean = 1, sd = 1),
+		y = beta0 + beta1 * x + rnorm(n, 0, 1)
+	)
+	
+	ls_fit = lm(y ~ x, data = sim_data)
+	
+	tibble(
+		beta0_hat = coef(ls_fit)[1],
+		beta1_hat = coef(ls_fit)[2]
+	)
+}
+```
+
+For `read_page_reviews`.
+
+```{r}
+library(rvest)
+
+read_page_reviews <- function(url) {
+  
+  h = read_html(url)
+  
+  title = h %>%
+    html_nodes("#cm_cr-review_list .review-title") %>%
+    html_text()
+  
+  stars = h %>%
+    html_nodes("#cm_cr-review_list .review-rating") %>%
+    html_text() %>%
+    str_extract("\\d") %>%
+    as.numeric()
+  
+  text = h %>%
+    html_nodes(".review-data:nth-child(4)") %>%
+    html_text()
+  
+  data_frame(title, stars, text)
+}
+```
+
+
+We turned this into an R package and used Roxygen to automatically create help pages and other package documentation. I'd recommend making R packages into Git repos and publishing to GitHub, but that's not strictly necessary. We also noted that carefully defining dependencies can make it easier for you and others to use your package (and avoid name conflicts).
+
+## Some example execution
+
+```{r}
+sim_regression(30)
+
+read_page_reviews("https://www.amazon.com/product-reviews/B00005JNBQ/ref=cm_cr_arp_d_viewopt_rvwer?ie=UTF8&reviewerType=avp_only_reviews&sortBy=recent&pageNumber=1")
+```
+
+## map functions
+
+`map` over a vector / list.
+
+```{r}
+n = rep(30, 10)
+
+map(n, sim_regression)
+
+map_df(n, ~sim_regression(n = .x, beta0 = 1, beta1 = 10))
+```
+
+for lots of napoleon dynamite reviews
+
+```{r}
+url_base = "https://www.amazon.com/product-reviews/B00005JNBQ/ref=cm_cr_arp_d_viewopt_rvwer?ie=UTF8&reviewerType=avp_only_reviews&sortBy=recent&pageNumber="
+
+urls = str_c(url_base, 1:10)
+
+dynamite_reviews = map(urls, read_page_reviews)
+```
+
+## list columns
+
+you can do this inside a data frame as well.
+
+```{r}
+tibble(n = rep(30, 10)) %>% 
+  mutate(sim_res = map(n, sim_regression)) %>% 
+  unnest()
+```
+
+creating list columns from larger datasets is also be helpful sometimes. here's an example using weather data.
+
+```{r}
+library(rnoaa)
+
+weather =
+  meteo_pull_monitors(c("USW00094728", "USC00519397", "USS0023B17S"),
+                      var = c("PRCP", "TMIN", "TMAX"),
+                      date_min = "2016-01-01",
+                      date_max = "2016-12-31") %>%
+  mutate(
+    name = recode(id, USW00094728 = "CentralPark_NY",
+                  USC00519397 = "Waikiki_HA",
+                  USS0023B17S = "Waterhole_WA"),
+    tmin = tmin / 10,
+    tmax = tmax / 10) %>%
+  select(name, id, everything())
+
+
+weather %>%
+  select( -id) %>%
+  nest(-name) %>%
+  mutate(models = map(data, ~lm(tmax ~ tmin, data = .x)),
+         coef = map(models, ~broom::tidy(.x))) %>%
+  select(name, coef) %>%
+  unnest
+```
+
+## bootstrapping
+
+a last quick example of list columns using the bootstrap as motivation.
+
+simulate some data.
+
+```{r}
+df = tibble(
+  x = rnorm(250, 1, 1),
+  error = x * rnorm(250, 0, 1),
+  y = 2 + 3 * x + error
+)
+
+df %>% 
+  ggplot(aes(x = x, y = y)) + geom_point()
+```
+
+implement bootstrap with `modelr::bootstrap`
+
+```{r}
+df %>% 
+  modelr::bootstrap(100) %>% 
+  mutate(models = map(strap, ~lm(y ~ x, data = .x)),
+         coef = map(models, ~broom::tidy(.x))) %>% 
+  select(.id, coef) %>% 
+  unnest() %>% 
+  group_by(term) %>% 
+  summarize(m = mean(estimate),
+            sd = sd(estimate))
+```
+
+compare to usual `lm` results.
+
+```{r}
+lm(y ~ x, data = df) %>% broom::tidy()
+```
+
